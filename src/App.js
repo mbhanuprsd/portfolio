@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import MatrixRain from './components/MatrixRain';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
@@ -15,6 +16,17 @@ const NAVBAR_HEIGHT = 80;
 // Main App component
 const App = () => {
     const [activeSection, setActiveSection] = useState('hero');
+    const [user, setUser] = useState(null);
+    const [emailVerified, setEmailVerified] = useState(false);
+
+    useEffect(() => {
+        const auth = getAuth();
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+            setUser(firebaseUser);
+            setEmailVerified(firebaseUser?.emailVerified ?? false);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const scrollToSection = (id) => {
         const element = document.getElementById(id);
@@ -42,7 +54,7 @@ const App = () => {
                                 <ProjectsSection />
                                 <ContactSection />
                             </div>
-                            <ChatWidget />
+                            <ChatWidget user={user} emailVerified={emailVerified} setUser={setUser} setEmailVerified={setEmailVerified} />
                             <footer className="relative z-10 py-8 text-center text-gray-600 text-sm">
                                 <p>
                                     &copy; {new Date().getFullYear()} Bhanu Prasad Merakanapalli. All rights reserved. System Operational.
@@ -51,7 +63,7 @@ const App = () => {
                         </div>
                     }
                 />
-                <Route path="/admin-chat" element={<AdminChatPanel />} />
+                <Route path="/admin-chat" element={<AdminChatPanel user={user} emailVerified={emailVerified} setUser={setUser} setEmailVerified={setEmailVerified} />} />
             </Routes>
         </Router>
     );

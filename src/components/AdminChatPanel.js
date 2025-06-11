@@ -8,100 +8,104 @@ import {
   orderBy,
   onSnapshot
 } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendEmailVerification } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, signOut, sendEmailVerification } from "firebase/auth";
 
 // Add your admin email(s) here
 const ALLOWED_ADMIN_EMAILS = [process.env.REACT_APP_FIREBASE_ADMIN_EMAIL];
 
-const AdminChatPanel = () => {
+// AdminChatPanel component
+const AdminChatPanel = ({ user, setUser, emailVerified }) => {
+  // State for chat messages, reply input, selected user, admin login form, and admin status
   const [messages, setMessages] = useState([]);
   const [reply, setReply] = useState("");
   const [selectedUser, setSelectedUser] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
-  const [adminUser, setAdminUser] = useState(null);
-  const [authError, setAuthError] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Admin authentication
+  // Check for admin custom claim (replace with your own logic if using Firebase custom claims)
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setAdminUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setAuthError("");
-    const auth = getAuth();
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
-      // Only allow login if email is in allowed list
-      if (!ALLOWED_ADMIN_EMAILS.includes(userCredential.user.email)) {
-        await signOut(auth);
-        setAdminUser(null);
-        setAuthError("Access denied: Not an admin account.");
-        return;
+    const checkAdmin = async () => {
+      if (user) {
+        setIsAdmin(ALLOWED_ADMIN_EMAILS.includes(user.email));
+      } else {
+        setIsAdmin(false);
       }
-      // If not verified, send verification and show message
-      if (!userCredential.user.emailVerified) {
-        await sendEmailVerification(userCredential.user);
-        await signOut(auth);
-        setAdminUser(null);
-        setAuthError("Please verify your email address. A verification link has been sent.");
-        return;
-      }
-    } catch (error) {
-      setAuthError("Invalid credentials.");
-    }
-  };
+    };
+    checkAdmin();
+  }, [user]);
 
-  const handleLogout = async () => {
-    const auth = getAuth();
-    await signOut(auth);
-    setAdminUser(null);
-    setAdminEmail("");
-    setAdminPassword("");
-  };
-
+  // Fetch messages from Firestore if admin is logged in
   useEffect(() => {
-    if (!adminUser) return;
+    if (!user || !isAdmin) return;
     const q = query(collection(db, "chats"), orderBy("createdAt"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return unsubscribe;
-  }, [adminUser]);
+  }, [user, isAdmin]);
 
+  // Auto-scroll to the bottom of the chat when messages or selected user changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedUser]);
 
-  // Get unique users (excluding admin)
+  // Get unique users (excluding admin) for the user list
   const users = Array.from(
     new Set(messages.filter(m => !m.isAdmin).map(m => m.sender))
   );
 
-  // Filter messages for selected user and admin
+  // Filter messages for the selected user and admin
   const chat = messages.filter(
     m => m.sender === selectedUser || (m.isAdmin && m.sender === selectedUser)
   );
 
+  // Handle admin login form submission
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    const auth = getAuth();
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      // If email is not verified, send verification and sign out
+      if (!userCredential.user.emailVerified) {
+        await sendEmailVerification(userCredential.user);
+        await signOut(auth);
+        setUser(null);
+        return;
+      }
+      setUser(userCredential.user);
+    } catch (error) {
+      await signOut(auth);
+      setUser(null);
+    }
+  };
+
+  // Handle logout for admin
+  const handleLogout = async () => {
+    const auth = getAuth();
+    await signOut(auth);
+    setUser(null);
+    setAdminEmail("");
+    setAdminPassword("");
+    setIsAdmin(false);
+  };
+
+  // Handle sending a reply as admin
   const sendReply = async (e) => {
     e.preventDefault();
     if (!reply.trim() || !selectedUser) return;
     await addDoc(collection(db, "chats"), {
       text: reply,
-      sender: selectedUser, // associate reply with user
+      sender: selectedUser,
       isAdmin: true,
       createdAt: serverTimestamp()
     });
     setReply("");
   };
 
-  if (!adminUser) {
+  // Show login form if not logged in
+  if (!user) {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-black border border-green-700 rounded-lg text-green-400 matrix-border matrix-glow">
         <h2 className="text-xl font-bold mb-4 text-green-400 text-shadow-green">Admin Login</h2>
@@ -131,7 +135,6 @@ const AdminChatPanel = () => {
           >
             Login
           </button>
-          {authError && <div className="text-red-400">{authError}</div>}
         </form>
         <style>
           {`
@@ -150,6 +153,40 @@ const AdminChatPanel = () => {
     );
   }
 
+  // Show error instead of messages if not admin, but allow login
+  if (user && !isAdmin) {
+    return (
+      <div className="max-w-xs mx-auto mt-20 p-6 bg-black border border-green-700 rounded-lg text-green-400 matrix-border matrix-glow">
+        <h2 className="text-xl font-bold mb-4 text-green-400 text-shadow-green">Admin Chat Panel</h2>
+        <div className="text-red-400 mb-4">{"Access denied: Not an admin account."}</div>
+        <div className="flex items-center gap-4">
+          <span className="text-base font-bold text-green-300 break-all">{user?.email}</span>
+          <button
+            onClick={handleLogout}
+            className="bg-red-700 text-white px-3 py-1 rounded font-semibold matrix-glow"
+            style={{ boxShadow: "0 0 8px #00ff41" }}
+          >
+            Logout
+          </button>
+        </div>
+        <style>
+          {`
+            .matrix-glow {
+              box-shadow: 0 0 8px #00ff41, 0 0 2px #00ff41;
+            }
+            .matrix-border {
+              border: 2px solid #00ff41 !important;
+            }
+            .text-shadow-green {
+              text-shadow: 0 0 8px #00ff41, 0 0 2px #00ff41;
+            }
+          `}
+        </style>
+      </div>
+    );
+  }
+
+  // Admin panel UI
   return (
     <div className="max-w-2xl mx-auto mt-10 p-4 bg-black border border-green-700 rounded-lg text-green-400 matrix-border matrix-glow font-mono"
       style={{
@@ -157,10 +194,11 @@ const AdminChatPanel = () => {
         border: "2px solid #00ff41"
       }}
     >
+      {/* Header with admin email and logout */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-green-400 text-shadow-green">Admin Chat Panel</h2>
         <div className="flex items-center gap-4">
-          <span className="text-base font-bold text-green-300 break-all">{adminUser?.email}</span>
+          <span className="text-base font-bold text-green-300 break-all">{user?.email}</span>
           <button
             onClick={handleLogout}
             className="bg-red-700 text-white px-3 py-1 rounded font-semibold matrix-glow"
@@ -171,22 +209,24 @@ const AdminChatPanel = () => {
         </div>
       </div>
       <div className="flex gap-4">
+        {/* User list */}
         <div>
           <h3 className="font-semibold mb-2 text-green-400 text-shadow-green">Users</h3>
           <ul>
-            {users.map(user => (
-              <li key={user}>
+            {users.map(userEmail => (
+              <li key={userEmail}>
                 <button
-                  className={`px-2 py-1 rounded matrix-glow ${selectedUser === user ? "bg-green-700 text-white" : "bg-gray-800 text-green-400"}`}
-                  onClick={() => setSelectedUser(user)}
+                  className={`px-2 py-1 rounded matrix-glow ${selectedUser === userEmail ? "bg-green-700 text-white" : "bg-gray-800 text-green-400"}`}
+                  onClick={() => setSelectedUser(userEmail)}
                   style={{ textShadow: "0 0 8px #00ff41" }}
                 >
-                  {user}
+                  {userEmail}
                 </button>
               </li>
             ))}
           </ul>
         </div>
+        {/* Chat area */}
         <div className="flex-1 flex flex-col">
           <div className="flex-1 overflow-y-auto mb-2 matrix-scroll"
             style={{
@@ -214,8 +254,10 @@ const AdminChatPanel = () => {
             ) : (
               <div className="text-gray-400">Select a user to view chat.</div>
             )}
+            {/* Dummy div for auto-scroll */}
             <div ref={messagesEndRef} />
           </div>
+          {/* Reply input for admin */}
           {selectedUser && (
             <form onSubmit={sendReply} className="flex gap-2 mt-2">
               <input
@@ -238,6 +280,7 @@ const AdminChatPanel = () => {
           )}
         </div>
       </div>
+      {/* Matrix theme styles */}
       <style>
         {`
           .matrix-glow {

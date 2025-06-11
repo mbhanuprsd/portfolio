@@ -10,15 +10,12 @@ import {
 } from "firebase/firestore";
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "firebase/auth";
 
-const ChatWidget = () => {
+const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
-    const [email, setEmail] = useState("");
     const [emailInput, setEmailInput] = useState("");
     const [passwordInput, setPasswordInput] = useState("");
     const [showChat, setShowChat] = useState(false);
-    const [user, setUser] = useState(null);
-    const [emailVerified, setEmailVerified] = useState(false);
     const [error, setError] = useState("");
     const messagesEndRef = useRef(null);
 
@@ -34,12 +31,6 @@ const ChatWidget = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, showChat]);
 
-    useEffect(() => {
-        if (user) {
-            setEmailVerified(user.emailVerified);
-        }
-    }, [user]);
-
     const handleEmailSubmit = async (e) => {
         e.preventDefault();
         setError("");
@@ -54,7 +45,6 @@ const ChatWidget = () => {
                 await sendEmailVerification(userCredential.user);
             }
             setUser(userCredential.user);
-            setEmail(userCredential.user.email);
             if (!userCredential.user.emailVerified) {
                 await sendEmailVerification(userCredential.user);
             }
@@ -72,10 +62,10 @@ const ChatWidget = () => {
 
     const sendMessage = async (e) => {
         e.preventDefault();
-        if (!input.trim() || !email || !emailVerified) return;
+        if (!input.trim() || !user?.email || !emailVerified) return;
         await addDoc(collection(db, "chats"), {
             text: input,
-            sender: email,
+            sender: user.email,
             isAdmin: false,
             createdAt: serverTimestamp()
         });
@@ -123,7 +113,7 @@ const ChatWidget = () => {
                         {messages
                             .filter(
                                 (msg) =>
-                                    msg.sender === email || (msg.isAdmin && msg.sender === email)
+                                    msg.sender === user?.email || (msg.isAdmin && msg.sender === user?.email)
                             )
                             .map((msg) => (
                                 <div
@@ -216,14 +206,13 @@ const ChatWidget = () => {
                     {/* Logout button for authenticated user */}
                     {user && emailVerified && (
                         <div className="flex items-center gap-2 mt-2">
-                            <span className="text-base font-bold text-green-300 break-all">{email}</span>
+                            <span className="text-base font-bold text-green-300 break-all">{user?.email}</span>
                             <button
                                 className="bg-black border border-green-700 text-green-400 px-3 py-1 rounded font-bold matrix-glow hover:bg-green-900 hover:text-black transition-all duration-200"
                                 onClick={async () => {
                                     const auth = getAuth();
                                     await auth.signOut();
                                     setUser(null);
-                                    setEmail("");
                                     setEmailInput("");
                                     setPasswordInput("");
                                     setEmailVerified(false);
