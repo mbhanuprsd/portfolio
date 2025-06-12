@@ -8,13 +8,11 @@ import {
     orderBy,
     onSnapshot
 } from "firebase/firestore";
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 
 const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
-    const [emailInput, setEmailInput] = useState("");
-    const [passwordInput, setPasswordInput] = useState("");
     const [showChat, setShowChat] = useState(false);
     const [error, setError] = useState("");
     const messagesEndRef = useRef(null);
@@ -31,23 +29,15 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, showChat]);
 
-    const handleEmailSubmit = async (e) => {
-        e.preventDefault();
+    // Google login handler
+    const handleGoogleLogin = async () => {
         setError("");
         const auth = getAuth();
+        const provider = new GoogleAuthProvider();
         try {
-            // Try to sign in, if fails, create account
-            let userCredential;
-            try {
-                userCredential = await signInWithEmailAndPassword(auth, emailInput, passwordInput);
-            } catch {
-                userCredential = await createUserWithEmailAndPassword(auth, emailInput, passwordInput);
-                await sendEmailVerification(userCredential.user);
-            }
-            setUser(userCredential.user);
-            if (!userCredential.user.emailVerified) {
-                await sendEmailVerification(userCredential.user);
-            }
+            const result = await signInWithPopup(auth, provider);
+            setUser(result.user);
+            setEmailVerified(result.user.emailVerified);
         } catch (err) {
             setError(err.message);
         }
@@ -73,10 +63,10 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
     };
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 font-mono">
+        <div className="fixed bottom-2 right-2 sm:bottom-4 sm:right-4 z-50 font-mono w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg">
             {!showChat ? (
                 <button
-                    className="bg-black border border-green-700 text-green-400 px-4 py-2 rounded-full shadow-lg hover:bg-green-900 hover:text-black transition-all duration-200 matrix-glow"
+                    className="w-full bg-black border border-green-700 text-green-400 px-4 py-2 rounded-full shadow-lg hover:bg-green-900 hover:text-black transition-all duration-200 matrix-glow"
                     onClick={() => setShowChat(true)}
                     style={{ fontFamily: "monospace", letterSpacing: "0.1em", textShadow: "0 0 8px #00ff41" }}
                 >
@@ -84,14 +74,14 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                 </button>
             ) : (
                 <div
-                    className="w-80 bg-black bg-opacity-95 border border-green-700 rounded-lg shadow-2xl flex flex-col matrix-border"
+                    className="w-full sm:w-80 bg-black bg-opacity-95 border border-green-700 rounded-lg shadow-2xl flex flex-col matrix-border"
                     style={{
                         boxShadow: "0 0 24px #00ff41, 0 0 8px #003b1a",
                         border: "2px solid #00ff41"
                     }}
                 >
                     <div className="flex justify-between items-center p-2 border-b border-green-700 bg-black bg-opacity-80">
-                        <span className="font-bold text-green-400 tracking-widest text-shadow-green">
+                        <span className="font-bold text-green-400 tracking-widest text-shadow-green text-sm sm:text-base">
                             <i className="fas fa-user-secret mr-2" />
                             Chat with The One
                         </span>
@@ -106,7 +96,7 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                     <div
                         className="flex-1 overflow-y-auto p-2 matrix-scroll"
                         style={{
-                            maxHeight: 300,
+                            maxHeight: "40vh",
                             background: "linear-gradient(180deg, #001a0a 0%, #003b1a 100%)"
                         }}
                     >
@@ -126,50 +116,33 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                                         textShadow: "0 0 8px #00ff41",
                                     }}
                                 >
-                                    <span className="block text-base font-semibold text-green-700">
+                                    <span className="block text-xs sm:text-base font-semibold text-green-700">
                                         {msg.isAdmin ? "Admin" : msg.sender}
                                     </span>
-                                    <span className="inline-block bg-black bg-opacity-70 px-2 py-1 rounded border border-green-900 matrix-glow text-lg">
+                                    <span className="inline-block bg-black bg-opacity-70 px-2 py-1 rounded border border-green-900 matrix-glow text-xs sm:text-lg">
                                         {msg.text}
                                     </span>
                                 </div>
                             ))}
                         <div ref={messagesEndRef} />
                     </div>
+                    {/* Google login button if not logged in */}
                     {!user ? (
-                        <form onSubmit={handleEmailSubmit} className="p-2 border-t border-green-700 flex flex-col gap-2">
-                            <input
-                                className="p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow"
-                                placeholder="Enter your email"
-                                type="email"
-                                value={emailInput}
-                                onChange={e => setEmailInput(e.target.value)}
-                                required
-                                autoFocus
-                                style={{ textShadow: "0 0 8px #00ff41" }}
-                            />
-                            <input
-                                className="p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow"
-                                placeholder="Enter a password"
-                                type="password"
-                                value={passwordInput}
-                                onChange={e => setPasswordInput(e.target.value)}
-                                required
-                                style={{ textShadow: "0 0 8px #00ff41" }}
-                            />
+                        <div className="p-2 border-t border-green-700 flex flex-col gap-2">
                             <button
-                                type="submit"
-                                className="bg-green-700 text-black px-3 py-1 rounded font-bold matrix-glow"
-                                disabled={!emailInput.trim() || !passwordInput.trim()}
+                                type="button"
+                                className="bg-white text-black px-3 py-2 rounded font-bold matrix-glow flex items-center justify-center gap-2"
+                                onClick={handleGoogleLogin}
                                 style={{ boxShadow: "0 0 8px #00ff41" }}
                             >
-                                Continue
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                                Sign in with Google
                             </button>
                             {error && <div className="text-red-400 text-xs">{error}</div>}
-                        </form>
+                        </div>
                     ) : !emailVerified ? (
                         <div className="p-2 border-t border-green-700 flex flex-col gap-2">
-                            <div className="text-yellow-400 text-sm mb-2">
+                            <div className="text-yellow-400 text-xs sm:text-sm mb-2">
                                 Please verify your email address. Check your inbox and click the verification link.
                             </div>
                             <button
@@ -184,7 +157,7 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                         <form onSubmit={sendMessage} className="p-2 border-t border-green-700 flex flex-col gap-2">
                             <div className="flex gap-2">
                                 <input
-                                    className="flex-1 p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow"
+                                    className="flex-1 p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow text-xs sm:text-base"
                                     placeholder="Type a message..."
                                     value={input}
                                     onChange={e => setInput(e.target.value)}
@@ -206,15 +179,13 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                     {/* Logout button for authenticated user */}
                     {user && emailVerified && (
                         <div className="flex items-center gap-2 mt-2">
-                            <span className="text-base font-bold text-green-300 break-all">{user?.email}</span>
+                            <span className="text-xs sm:text-base font-bold text-green-300 break-all">{user?.email}</span>
                             <button
                                 className="bg-black border border-green-700 text-green-400 px-3 py-1 rounded font-bold matrix-glow hover:bg-green-900 hover:text-black transition-all duration-200"
                                 onClick={async () => {
                                     const auth = getAuth();
-                                    await auth.signOut();
+                                    await signOut(auth);
                                     setUser(null);
-                                    setEmailInput("");
-                                    setPasswordInput("");
                                     setEmailVerified(false);
                                     setInput("");
                                 }}
