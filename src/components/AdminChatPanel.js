@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import {
   collection,
@@ -8,27 +8,47 @@ import {
   orderBy,
   onSnapshot
 } from "firebase/firestore";
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
-
-// Add your admin email(s) here
-const ALLOWED_ADMIN_EMAILS = [process.env.REACT_APP_FIREBASE_ADMIN_EMAIL];
+import { getAuth, getIdTokenResult, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 
 // AdminChatPanel component
-const AdminChatPanel = ({ user, setUser, emailVerified }) => {
-  const [messages, setMessages] = useState([]);
+const AdminChatPanel = ({ user, setUser }) => {
+  const [messageState, setMessageState] = useState({ user: null, messages: [] });
   const [reply, setReply] = useState("");
   const [selectedUser, setSelectedUser] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUser, setAdminUser] = useState(null);
   const [authError, setAuthError] = useState("");
   const messagesEndRef = useRef(null);
+  const isAdmin = user !== null && adminUser === user;
+  const messages = useMemo(
+    () => messageState.user === user ? messageState.messages : [],
+    [messageState, user]
+  );
 
-  // Check for admin using allowed emails
+  // Admin access is granted by a custom claim set through the Firebase Admin SDK.
   useEffect(() => {
-    if (user) {
-      setIsAdmin(ALLOWED_ADMIN_EMAILS.includes(user.email));
-    } else {
-      setIsAdmin(false);
-    }
+    let cancelled = false;
+    setAdminUser(null);
+    setSelectedUser("");
+    setReply("");
+
+    if (!user) return undefined;
+
+    setAuthError("");
+    getIdTokenResult(user, true)
+      .then((tokenResult) => {
+        if (!cancelled) {
+          if (tokenResult.claims.admin === true && tokenResult.claims.email_verified === true) {
+            setAdminUser(user);
+          }
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setAuthError(error.message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Fetch messages from Firestore if admin is logged in
@@ -36,7 +56,13 @@ const AdminChatPanel = ({ user, setUser, emailVerified }) => {
     if (!user || !isAdmin) return;
     const q = query(collection(db, "chats"), orderBy("createdAt"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setMessageState({
+        user,
+        messages: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      });
+      setAuthError("");
+    }, (error) => {
+      setAuthError(error.message);
     });
     return unsubscribe;
   }, [user, isAdmin]);
@@ -80,20 +106,26 @@ const AdminChatPanel = ({ user, setUser, emailVerified }) => {
     const auth = getAuth();
     await signOut(auth);
     setUser(null);
-    setIsAdmin(false);
+    setAdminUser(null);
+    setAuthError("");
   };
 
   // Handle sending a reply as admin
   const sendReply = async (e) => {
     e.preventDefault();
-    if (!reply.trim() || !selectedUser) return;
-    await addDoc(collection(db, "chats"), {
-      text: reply,
-      sender: selectedUser,
-      isAdmin: true,
-      createdAt: serverTimestamp()
-    });
-    setReply("");
+    if (!isAdmin || !reply.trim() || !selectedUser) return;
+    try {
+      await addDoc(collection(db, "chats"), {
+        text: reply.trim(),
+        sender: selectedUser,
+        isAdmin: true,
+        createdAt: serverTimestamp()
+      });
+      setReply("");
+      setAuthError("");
+    } catch (error) {
+      setAuthError(error.message);
+    }
   };
 
   // Show Google login if not logged in
@@ -133,7 +165,9 @@ const AdminChatPanel = ({ user, setUser, emailVerified }) => {
     return (
       <div className="max-w-xs mx-auto mt-20 p-6 bg-black border border-green-700 rounded-lg text-green-400 matrix-border matrix-glow">
         <h2 className="text-xl font-bold mb-4 text-green-400 text-shadow-green">Admin Chat Panel</h2>
-        <div className="text-red-400 mb-4">{"Access denied: Not an admin account."}</div>
+        <div className="text-red-400 mb-4">
+          {authError || "Access denied: This account does not have the required admin claim."}
+        </div>
         <div className="flex items-center gap-4">
           <span
             className="text-xs sm:text-base font-bold text-green-300 break-all truncate max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] overflow-hidden whitespace-nowrap"
@@ -191,6 +225,7 @@ const AdminChatPanel = ({ user, setUser, emailVerified }) => {
           </button>
         </div>
       </div>
+      {authError && <div className="text-red-400 mb-4" role="alert">{authError}</div>}
       <div className="flex flex-col lg:flex-row gap-4">
         {/* User list */}
         <div className="mb-4 lg:mb-0 w-full lg:w-1/4">

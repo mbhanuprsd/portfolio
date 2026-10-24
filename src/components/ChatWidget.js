@@ -5,6 +5,7 @@ import {
     addDoc,
     serverTimestamp,
     query,
+    where,
     orderBy,
     onSnapshot
 } from "firebase/firestore";
@@ -18,12 +19,25 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        const q = query(collection(db, "chats"), orderBy("createdAt"));
+        if (!user?.email || !emailVerified) {
+            setMessages([]);
+            return undefined;
+        }
+
+        setMessages([]);
+        const q = query(
+            collection(db, "chats"),
+            where("sender", "==", user.email),
+            orderBy("createdAt")
+        );
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setError("");
+        }, (snapshotError) => {
+            setError(snapshotError.message);
         });
         return unsubscribe;
-    }, []);
+    }, [user, emailVerified]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,21 +59,30 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
 
     const refreshVerification = async () => {
         const auth = getAuth();
-        await auth.currentUser.reload();
-        setUser(auth.currentUser);
-        setEmailVerified(auth.currentUser.emailVerified);
+        try {
+            await auth.currentUser.reload();
+            setUser(auth.currentUser);
+            setEmailVerified(auth.currentUser.emailVerified);
+        } catch (verificationError) {
+            setError(verificationError.message);
+        }
     };
 
     const sendMessage = async (e) => {
         e.preventDefault();
         if (!input.trim() || !user?.email || !emailVerified) return;
-        await addDoc(collection(db, "chats"), {
-            text: input,
-            sender: user.email,
-            isAdmin: false,
-            createdAt: serverTimestamp()
-        });
-        setInput("");
+        try {
+            await addDoc(collection(db, "chats"), {
+                text: input.trim(),
+                sender: user.email,
+                isAdmin: false,
+                createdAt: serverTimestamp()
+            });
+            setInput("");
+            setError("");
+        } catch (sendError) {
+            setError(sendError.message);
+        }
     };
 
     return (
@@ -152,29 +175,33 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
                             >
                                 I've Verified My Email
                             </button>
+                            {error && <div className="text-red-400 text-xs">{error}</div>}
                         </div>
                     ) : (
-                        <form onSubmit={sendMessage} className="p-2 border-t border-green-700 flex flex-col gap-2">
-                            <div className="flex gap-2">
-                                <input
-                                    className="flex-1 p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow text-xs sm:text-base"
-                                    placeholder="Type a message..."
-                                    value={input}
-                                    onChange={e => setInput(e.target.value)}
-                                    required
-                                    autoFocus
-                                    style={{ textShadow: "0 0 8px #00ff41" }}
-                                />
-                                <button
-                                    type="submit"
-                                    className="bg-green-700 text-black px-3 py-1 rounded font-bold matrix-glow"
-                                    disabled={!input.trim()}
-                                    style={{ boxShadow: "0 0 8px #00ff41" }}
-                                >
-                                    Send
-                                </button>
-                            </div>
-                        </form>
+                        <div className="p-2 border-t border-green-700">
+                            {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
+                            <form onSubmit={sendMessage} className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <input
+                                        className="flex-1 p-1 rounded bg-black text-green-400 border border-green-700 placeholder-green-700 matrix-glow text-xs sm:text-base"
+                                        placeholder="Type a message..."
+                                        value={input}
+                                        onChange={e => setInput(e.target.value)}
+                                        required
+                                        autoFocus
+                                        style={{ textShadow: "0 0 8px #00ff41" }}
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="bg-green-700 text-black px-3 py-1 rounded font-bold matrix-glow"
+                                        disabled={!input.trim()}
+                                        style={{ boxShadow: "0 0 8px #00ff41" }}
+                                    >
+                                        Send
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     )}
                     {/* Logout button for authenticated user */}
                     {user && emailVerified && (
