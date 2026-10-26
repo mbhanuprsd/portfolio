@@ -46,9 +46,9 @@ const ChatWidget = ({ user, emailVerified, setUser, setEmailVerified }) => {
     // Google login handler
     const handleGoogleLogin = async () => {
         setError("");
-        const auth = getAuth();
-        const provider = new GoogleAuthProvider();
         try {
+            const auth = getAuth();
+            const provider = new GoogleAuthProvider();
             const result = await signInWithPopup(auth, provider);
             setUser(result.user);
             setEmailVerified(result.user.emailVerified);

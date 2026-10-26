@@ -3,6 +3,13 @@ import React from 'react';
 const ProjectsSection = () => {
     const projects = [
         {
+            id: 14,
+            title: "Project: 'Celebrations'",
+            description: "Built a browser-based platform for multiplayer and solo games, including Draw & Guess, Ludo, UNO, Mini Golf, and classic solo games. Multiplayer rooms, chat, and optional voice chat bring players together.",
+            tech: ["React", "Firebase", "LiveKit", "Multiplayer Games"],
+            link: "https://games.calmindian.com/"
+        },
+        {
             id: 1,
             title: "Project: 'The Sims 4'",
             description: "Worked as Gameplay Engineer for new pack development associated with Electronic Arts (EA). Used skills in Python and C++.",

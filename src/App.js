@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { isFirebaseConfigured } from './firebase';
 import MatrixRain from './components/MatrixRain';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
@@ -18,14 +19,24 @@ const App = () => {
     const [activeSection, setActiveSection] = useState('hero');
     const [user, setUser] = useState(null);
     const [emailVerified, setEmailVerified] = useState(false);
+    const [firebaseAuthUnavailable, setFirebaseAuthUnavailable] = useState(false);
 
     useEffect(() => {
-        const auth = getAuth();
-        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-            setUser(firebaseUser);
-            setEmailVerified(firebaseUser?.emailVerified ?? false);
-        });
-        return () => unsubscribe();
+        if (!isFirebaseConfigured) return undefined;
+
+        try {
+            const auth = getAuth();
+            return onAuthStateChanged(auth, (firebaseUser) => {
+                setUser(firebaseUser);
+                setEmailVerified(firebaseUser?.emailVerified ?? false);
+                setFirebaseAuthUnavailable(false);
+            }, () => {
+                setFirebaseAuthUnavailable(true);
+            });
+        } catch {
+            setFirebaseAuthUnavailable(true);
+            return undefined;
+        }
     }, []);
 
     const scrollToSection = (id) => {
@@ -54,16 +65,33 @@ const App = () => {
                                 <ProjectsSection />
                                 <ContactSection />
                             </div>
-                            <ChatWidget user={user} emailVerified={emailVerified} setUser={setUser} setEmailVerified={setEmailVerified} />
+                            {isFirebaseConfigured && (
+                                <ChatWidget
+                                    user={user}
+                                    emailVerified={emailVerified}
+                                    setUser={setUser}
+                                    setEmailVerified={setEmailVerified}
+                                />
+                            )}
                             <footer className="relative z-10 py-8 text-center text-gray-600 text-sm">
                                 <p>
                                     &copy; {new Date().getFullYear()} Bhanu Prasad Merakanapalli. All rights reserved. System Operational.
                                 </p>
+                                {(!isFirebaseConfigured || firebaseAuthUnavailable) && (
+                                    <p role="status" className="mt-2 text-yellow-600">
+                                        Chat services are unavailable. Check the Firebase configuration.
+                                    </p>
+                                )}
                             </footer>
                         </div>
                     }
                 />
-                <Route path="/admin-chat" element={<AdminChatPanel user={user} emailVerified={emailVerified} setUser={setUser} setEmailVerified={setEmailVerified} />} />
+                <Route
+                    path="/admin-chat"
+                    element={isFirebaseConfigured
+                        ? <AdminChatPanel user={user} emailVerified={emailVerified} setUser={setUser} setEmailVerified={setEmailVerified} />
+                        : <p role="status" className="max-w-xl mx-auto mt-20 p-6 text-center text-yellow-600">Firebase configuration is required for admin chat.</p>}
+                />
             </Routes>
         </Router>
     );

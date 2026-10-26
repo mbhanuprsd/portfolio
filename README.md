@@ -2,6 +2,26 @@
 
 https://calmindian-33.web.app/
 
+## Local development
+
+The portfolio can run without Firebase configuration, but chat and admin chat
+will be unavailable. To enable them, create a `.env` file in the repository
+root with the Firebase web app settings:
+
+```env
+REACT_APP_FIREBASE_API_KEY=your-api-key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your-project-id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+REACT_APP_FIREBASE_APP_ID=your-app-id
+```
+
+Restart the development server after changing `.env`. An `auth/invalid-api-key`
+error means the configured API key is missing or does not match the Firebase
+project; check the value in `.env` locally and the
+`REACT_APP_FIREBASE_API_KEY` GitHub Actions secret for deployed builds.
+
 ## Chat security setup
 
 Deploy the Firestore security rules and required query index:

@@ -85,9 +85,9 @@ const AdminChatPanel = ({ user, setUser }) => {
   // Google login handler for admin
   const handleGoogleLogin = async () => {
     setAuthError("");
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
     try {
+      const auth = getAuth();
+      const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       if (!result.user.emailVerified) {
         setAuthError("Please verify your Google account email before logging in.");
@@ -103,11 +103,15 @@ const AdminChatPanel = ({ user, setUser }) => {
 
   // Handle logout for admin
   const handleLogout = async () => {
-    const auth = getAuth();
-    await signOut(auth);
-    setUser(null);
-    setAdminUser(null);
-    setAuthError("");
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+      setUser(null);
+      setAdminUser(null);
+      setAuthError("");
+    } catch (error) {
+      setAuthError(error.message);
+    }
   };
 
   // Handle sending a reply as admin
