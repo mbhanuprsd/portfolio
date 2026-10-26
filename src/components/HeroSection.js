@@ -15,6 +15,12 @@ const HeroSection = ({ scrollToSection }) => {
     const [isTyping, setIsTyping] = useState(true);
 
     useEffect(() => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            setDisplayedText(phrases[phrases.length - 1]);
+            setIsTyping(false);
+            return undefined;
+        }
+
         let timeout;
         const currentPhrase = phrases[currentPhraseIndex];
 
